@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cook's Diary</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-dashboard">
+<header class="nav">
+  <span class="nav-brand">Cook&rsquo;s Diary</span>
+  <a class="btn btn-secondary" href="book.html">Open the Book</a>
+  <a class="btn btn-primary" href="recipe-form.html">+ New recipe</a>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <div class="hero-kicker">Your personal recipe book</div>
+      <h1>Everything you cook, bound in one book.</h1>
+      <p class="hero-tagline">Keep your favorite recipes close, from everyday meals to the ones worth making twice. Browse, save, and return to them whenever the kitchen calls.</p>
+    </div>
+    <div>
+      <label class="search-label" for="q">Find a recipe</label>
+      <input id="q" class="input" type="search" placeholder="Type a name — saffron, madeleines…" autocomplete="off" />
+      <div class="search-wrap">
+        <div id="search-results" class="search-results" hidden></div>
+        <div id="search-empty" class="search-empty" hidden>Nothing under that name yet.</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="hr" style="margin: var(--space-8) 0">
+
+  <section id="has-recipes" style="animation: inkIn 320ms ease both" hidden>
+    <div class="stats-row">
+      <div class="stat">
+        <div id="stat-total" class="stat-num">0</div>
+        <div class="stat-label">Recipes</div>
+      </div>
+      <div class="stat">
+        <div id="stat-cats" class="stat-num">0</div>
+        <div class="stat-label">Categories</div>
+      </div>
+      <div class="stat">
+        <div id="stat-quickest" class="stat-num">—</div>
+        <div class="stat-label">Quickest, in minutes</div>
+      </div>
+    </div>
+
+    <div class="dash-body">
+      <a id="spotlight" class="spotlight" href="book.html">
+        <div class="spotlight-photo" id="spotlight-photo"></div>
+        <div class="spotlight-kicker">Recently added</div>
+        <h3 id="spotlight-title"></h3>
+        <div class="spotlight-meta" id="spotlight-meta"></div>
+      </a>
+
+      <div>
+        <h6>Jump by category</h6>
+        <div id="cat-chips" class="cat-chips"></div>
+        <hr class="hr">
+        <p class="dash-blurb">Whether you're looking for something quick, sweet, or savory, there's a page for it.</p>
+        <a class="btn btn-secondary" href="book.html">Open the Book &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="is-empty" class="empty-state" hidden>
+    <h2>No pages yet</h2>
+    <p>Add the first recipe and it becomes page one of the book.</p>
+    <a class="btn btn-primary" href="recipe-form.html">Add your first recipe</a>
+  </section>
+</main>
+
+<script type="module">
+  import { load } from './recipes.js';
+
+  let list;
+  try {
+    list = await load();
+  } catch (err) {
+    document.querySelector('main').innerHTML =
+      '<div class="empty-state"><h2>Can&rsquo;t reach the database</h2><p>' + err.message +
+      '</p><p>Check that MySQL is running in XAMPP and that sql/schema.sql has been imported.</p></div>';
+    throw err;
+  }
+
+  const qInput = document.getElementById('q');
+  const resultsEl = document.getElementById('search-results');
+  const emptyEl = document.getElementById('search-empty');
+
+  function renderSearch() {
+    const q = qInput.value.trim().toLowerCase();
+    resultsEl.hidden = true;
+    emptyEl.hidden = true;
+    resultsEl.innerHTML = '';
+    if (!q) return;
+    const matches = list.filter(r =>
+      r.title.toLowerCase().includes(q) || (r.category || '').toLowerCase().includes(q)
+    ).slice(0, 6);
+    if (matches.length === 0) {
+      emptyEl.hidden = false;
+      return;
+    }
+    resultsEl.hidden = false;
+    matches.forEach(r => {
+      const a = document.createElement('a');
+      a.className = 'search-result-row';
+      a.href = 'book.html?id=' + encodeURIComponent(r.id);
+      a.innerHTML =
+        '<span class="search-result-title"></span><span style="flex:1"></span>' +
+        '<span class="search-result-cat"></span>';
+      a.querySelector('.search-result-title').textContent = r.title;
+      a.querySelector('.search-result-cat').textContent = r.category || '';
+      resultsEl.appendChild(a);
+    });
+  }
+  qInput.addEventListener('input', renderSearch);
+
+  const cats = [];
+  list.forEach(r => { if (r.category && cats.indexOf(r.category) < 0) cats.push(r.category); });
+
+  if (list.length === 0) {
+    document.getElementById('is-empty').hidden = false;
+  } else {
+    document.getElementById('has-recipes').hidden = false;
+
+    document.getElementById('stat-total').textContent = list.length;
+    document.getElementById('stat-cats').textContent = cats.length;
+    const times = list.map(r => Number(r.cookTime) || 0).filter(t => t > 0);
+    document.getElementById('stat-quickest').textContent = times.length ? Math.min.apply(null, times) : '—';
+
+    const newest = list[list.length - 1];
+    document.getElementById('spotlight').href = 'book.html?id=' + encodeURIComponent(newest.id);
+    document.getElementById('spotlight-title').textContent = newest.title;
+    document.getElementById('spotlight-meta').textContent = newest.category + ' · ' + newest.cookTime + ' min';
+    const photoEl = document.getElementById('spotlight-photo');
+    if (newest.imageUrl) {
+      photoEl.innerHTML = '<img class="plate" src="' + newest.imageUrl.replace(/"/g, '&quot;') + '" alt="">';
+    } else {
+      photoEl.innerHTML = '<div class="plate plate-placeholder">Drop a photo of the newest recipe</div>';
+    }
+
+    const chipsEl = document.getElementById('cat-chips');
+    cats.forEach(c => {
+      const a = document.createElement('a');
+      a.className = 'tag tag-outline';
+      a.href = 'book.html?cat=' + encodeURIComponent(c);
+      a.textContent = c;
+      chipsEl.appendChild(a);
+    });
+  }
+</script>
+</body>
+</html>

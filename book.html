@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Book — Cook's Diary</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-book">
+<div class="book-shell">
+  <header class="nav book-nav">
+    <a class="nav-brand" href="index.html">Cook&rsquo;s Diary</a>
+    <button id="toc-toggle" class="btn btn-secondary" type="button">Contents</button>
+    <span id="folio" class="book-folio"></span>
+    <a class="btn btn-secondary" href="recipe-form.html">+ New recipe</a>
+  </header>
+
+  <div class="book-stage">
+    <div class="book">
+      <aside id="toc" class="toc">
+        <div class="toc-heading">Contents</div>
+        <div id="toc-list"></div>
+      </aside>
+
+      <main class="reading-pane">
+        <div id="reading-scroll" class="reading-scroll">
+          <article id="recipe-article" class="recipe-article" hidden>
+            <div class="recipe-photo" id="recipe-photo"></div>
+            <div class="recipe-meta-row">
+              <span id="recipe-category" class="tag tag-outline"></span>
+              <span id="recipe-cook" class="recipe-cook"></span>
+            </div>
+            <h1 id="recipe-title"></h1>
+            <hr class="hr">
+            <div class="recipe-columns">
+              <section>
+                <h6>Ingredients</h6>
+                <ul id="ingredient-list" class="ingredient-list"></ul>
+              </section>
+              <section>
+                <h6>Method</h6>
+                <ol id="step-list" class="step-list"></ol>
+              </section>
+            </div>
+          </article>
+
+          <div id="book-empty" class="book-empty" hidden>
+            <h2>The book is empty</h2>
+            <p>Write the first recipe and it becomes page one.</p>
+            <a class="btn btn-primary" href="recipe-form.html">+ New recipe</a>
+          </div>
+        </div>
+
+        <div id="bottombar" class="book-bottombar" hidden>
+          <a id="edit-link" class="btn btn-ghost" href="#">Edit</a>
+          <button id="delete-btn" class="btn btn-ghost" style="color: var(--color-neutral-700)" type="button">Delete</button>
+          <span style="flex:1"></span>
+          <span id="next-label" class="next-label"></span>
+          <button id="next-btn" class="btn btn-primary" type="button">Next &rarr;</button>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { load, remove } from './recipes.js';
+
+  let list;
+  try {
+    list = await load();
+  } catch (err) {
+    document.querySelector('.book-stage').innerHTML =
+      '<div class="book-empty"><h2>Can&rsquo;t reach the database</h2><p>' + err.message +
+      '</p><p>Check that MySQL is running in XAMPP and that sql/schema.sql has been imported.</p></div>';
+    throw err;
+  }
+  let idx = 0;
+
+  const q = new URLSearchParams(location.search);
+  const idParam = q.get('id'), catParam = q.get('cat');
+  if (idParam) {
+    const i = list.findIndex(r => r.id === idParam);
+    if (i >= 0) idx = i;
+  } else if (catParam) {
+    const i = list.findIndex(r => r.category === catParam);
+    if (i >= 0) idx = i;
+  }
+
+  const tocEl = document.getElementById('toc');
+  const tocListEl = document.getElementById('toc-list');
+  const folioEl = document.getElementById('folio');
+  const articleEl = document.getElementById('recipe-article');
+  const emptyEl = document.getElementById('book-empty');
+  const bottombarEl = document.getElementById('bottombar');
+  const readingScrollEl = document.getElementById('reading-scroll');
+  const readingPaneEl = document.querySelector('.reading-pane');
+
+  function photoHtml(recipe) {
+    if (recipe.imageUrl) {
+      return '<img class="plate" src="' + recipe.imageUrl.replace(/"/g, '&quot;') + '" alt="">';
+    }
+    return '<div class="plate plate-placeholder">Drop a photo of ' + recipe.title.toLowerCase() + '</div>';
+  }
+
+  function renderToc() {
+    tocListEl.innerHTML = '';
+    list.forEach((r, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'toc-row' + (i === idx ? ' active' : '');
+      btn.innerHTML =
+        '<span class="toc-num">' + String(i + 1).padStart(2, '0') + '</span><span></span>';
+      btn.querySelector('span:last-child').textContent = r.title;
+      btn.addEventListener('click', () => jump(i));
+      tocListEl.appendChild(btn);
+    });
+  }
+
+  function renderRecipe() {
+    const n = list.length;
+    if (n === 0) {
+      articleEl.hidden = true;
+      emptyEl.hidden = false;
+      bottombarEl.hidden = true;
+      folioEl.textContent = '';
+      return;
+    }
+    idx = Math.min(idx, n - 1);
+    const current = list[idx];
+    const nextIdx = (idx + 1) % n;
+
+    emptyEl.hidden = true;
+    articleEl.hidden = false;
+    bottombarEl.hidden = false;
+
+    document.getElementById('recipe-photo').innerHTML = photoHtml(current);
+    document.getElementById('recipe-category').textContent = current.category;
+    document.getElementById('recipe-cook').textContent = current.cookTime + ' min';
+    document.getElementById('recipe-title').textContent = current.title;
+
+    const ingList = document.getElementById('ingredient-list');
+    ingList.innerHTML = '';
+    (current.ingredients || []).forEach(ing => {
+      const li = document.createElement('li');
+      li.textContent = ing;
+      ingList.appendChild(li);
+    });
+
+    const stepList = document.getElementById('step-list');
+    stepList.innerHTML = '';
+    (current.steps || []).forEach((step, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="step-num">' + (i + 1) + '</span><span class="step-text"></span>';
+      li.querySelector('.step-text').textContent = step;
+      stepList.appendChild(li);
+    });
+
+    document.getElementById('edit-link').href = 'recipe-form.html?id=' + encodeURIComponent(current.id);
+    document.getElementById('next-label').textContent = n > 1 ? list[nextIdx].title : '';
+    folioEl.textContent = 'Page ' + (idx + 1) + ' of ' + n;
+
+    readingScrollEl.scrollTop = 0;
+    renderToc();
+  }
+
+  function playPageTurn() {
+    const overlay = document.createElement('div');
+    overlay.className = 'page-turn-overlay';
+    readingPaneEl.appendChild(overlay);
+    overlay.addEventListener('animationend', () => overlay.remove());
+    setTimeout(() => overlay.remove(), 700);
+  }
+
+  function jump(i) {
+    tocEl.classList.remove('open');
+    if (i === idx) return;
+    idx = i;
+    playPageTurn();
+    renderRecipe();
+  }
+
+  document.getElementById('next-btn').addEventListener('click', () => {
+    if (list.length < 2) return;
+    jump((idx + 1) % list.length);
+  });
+
+  document.getElementById('delete-btn').addEventListener('click', async () => {
+    const current = list[idx];
+    if (!current) return;
+    list = await remove(current.id);
+    idx = Math.min(idx, Math.max(0, list.length - 1));
+    renderRecipe();
+  });
+
+  document.getElementById('toc-toggle').addEventListener('click', () => {
+    tocEl.classList.toggle('open');
+  });
+
+  renderRecipe();
+</script>
+</body>
+</html>

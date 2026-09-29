@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recipe — Cook's Diary</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-form">
+<header class="nav">
+  <a class="nav-brand" href="index.html">Cook&rsquo;s Diary</a>
+  <a class="btn btn-secondary" href="book.html">Open the Book</a>
+</header>
+
+<main>
+  <div id="kicker" class="form-kicker">A new page</div>
+  <h1 id="heading">Add a recipe</h1>
+  <hr class="hr" style="margin-bottom: var(--space-6)">
+
+  <form id="recipe-form">
+    <div class="field">
+      <label for="title">Recipe name</label>
+      <input id="title" class="input" type="text" placeholder="Saffron risotto" />
+      <div id="err-title" class="field-error" hidden>A name is needed before this page can be bound.</div>
+    </div>
+
+    <div class="form-row-2">
+      <div class="field">
+        <label for="category">Category</label>
+        <input id="category" class="input" type="text" placeholder="Mains" list="cats" />
+        <datalist id="cats"></datalist>
+      </div>
+      <div class="field">
+        <label for="cookTime">Cook time (minutes)</label>
+        <input id="cookTime" class="input" type="number" min="0" placeholder="35" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="imageUrl">Image URL (optional)</label>
+      <input id="imageUrl" class="input" type="url" placeholder="https://" />
+    </div>
+
+    <div class="field">
+      <label for="ingredients">Ingredients — one per line</label>
+      <textarea id="ingredients" class="input" rows="7" placeholder="300g carnaroli rice&#10;1 litre hot chicken stock"></textarea>
+      <div id="err-ingredients" class="field-error" hidden>List at least one ingredient.</div>
+    </div>
+
+    <div class="field">
+      <label for="steps">Steps — one per line</label>
+      <textarea id="steps" class="input" rows="9" placeholder="Sweat the onion in butter.&#10;Toast the rice for two minutes."></textarea>
+      <div id="err-steps" class="field-error" hidden>Write at least one step.</div>
+    </div>
+
+    <hr class="hr" style="margin: 0">
+
+    <div class="form-actions">
+      <button id="submit-btn" class="btn btn-primary" type="submit">Add to the book</button>
+      <a class="btn btn-secondary" href="book.html">Cancel</a>
+      <span class="spacer"></span>
+      <span id="form-summary" class="form-summary" hidden>Some fields still need filling.</span>
+    </div>
+  </form>
+</main>
+
+<script type="module">
+  import { load, upsert, categories, splitLines } from './recipes.js';
+
+  let list;
+  try {
+    list = await load();
+  } catch (err) {
+    document.querySelector('main').innerHTML =
+      '<h1>Can&rsquo;t reach the database</h1><p>' + err.message +
+      '</p><p>Check that MySQL is running in XAMPP and that sql/schema.sql has been imported.</p>';
+    throw err;
+  }
+  const editId = new URLSearchParams(location.search).get('id');
+  const editing = editId ? list.find(r => r.id === editId) : null;
+
+  const catsEl = document.getElementById('cats');
+  categories(list).forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    catsEl.appendChild(opt);
+  });
+
+  const titleEl = document.getElementById('title');
+  const categoryEl = document.getElementById('category');
+  const cookTimeEl = document.getElementById('cookTime');
+  const imageUrlEl = document.getElementById('imageUrl');
+  const ingredientsEl = document.getElementById('ingredients');
+  const stepsEl = document.getElementById('steps');
+
+  if (editing) {
+    document.getElementById('kicker').textContent = 'Revising a page';
+    document.getElementById('heading').textContent = 'Edit recipe';
+    document.getElementById('submit-btn').textContent = 'Save changes';
+    titleEl.value = editing.title;
+    categoryEl.value = editing.category || '';
+    cookTimeEl.value = editing.cookTime || '';
+    imageUrlEl.value = editing.imageUrl || '';
+    ingredientsEl.value = (editing.ingredients || []).join('\n');
+    stepsEl.value = (editing.steps || []).join('\n');
+  }
+
+  let tried = false;
+
+  function errors() {
+    return {
+      title: !titleEl.value.trim(),
+      ingredients: splitLines(ingredientsEl.value).length === 0,
+      steps: splitLines(stepsEl.value).length === 0
+    };
+  }
+
+  function renderErrors() {
+    const e = errors();
+    document.getElementById('err-title').hidden = !(tried && e.title);
+    document.getElementById('err-ingredients').hidden = !(tried && e.ingredients);
+    document.getElementById('err-steps').hidden = !(tried && e.steps);
+    document.getElementById('form-summary').hidden = !(tried && (e.title || e.ingredients || e.steps));
+  }
+
+  [titleEl, ingredientsEl, stepsEl].forEach(el => el.addEventListener('input', renderErrors));
+
+  document.getElementById('recipe-form').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const e = errors();
+    if (e.title || e.ingredients || e.steps) {
+      tried = true;
+      renderErrors();
+      return;
+    }
+    const payload = {
+      title: titleEl.value.trim(),
+      category: categoryEl.value.trim() || 'Uncategorised',
+      cookTime: Number(cookTimeEl.value) || 0,
+      imageUrl: imageUrlEl.value.trim(),
+      ingredients: splitLines(ingredientsEl.value),
+      steps: splitLines(stepsEl.value)
+    };
+    if (editing) payload.id = editing.id;
+
+    const submitBtn = document.getElementById('submit-btn');
+    submitBtn.disabled = true;
+    try {
+      const saved = await upsert(payload);
+      location.href = 'book.html?id=' + encodeURIComponent(saved.id);
+    } catch (err) {
+      submitBtn.disabled = false;
+      alert('Could not save this recipe: ' + err.message);
+    }
+  });
+</script>
+</body>
+</html>
