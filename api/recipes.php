@@ -80,8 +80,7 @@ switch ($method) {
         http_response_code(201);
         echo json_encode(row_to_recipe($stmt->fetch()));
         break;
-    // FUNCTIONALITIES FOR NOW: READ & CREATE. UPDATE & DELETE ARE COMMENTED OUT FOR NOW, AS THEY ARE NOT NEEDED FOR THE CURRENT APP wkwk
-    /*case 'PUT':
+    case 'PUT':
         if (!$id) fail(400, 'An id is required to update a recipe.');
         $data = read_json_body();
         if (!$data || empty(trim($data['title'] ?? ''))) {
@@ -116,7 +115,7 @@ switch ($method) {
         $stmt->execute([$id]);
         echo json_encode(['deleted' => true, 'id' => (string) $id]);
         break;
-        */
+
     default:
         fail(405, 'Method not allowed.');
 }
